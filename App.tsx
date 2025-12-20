@@ -43,15 +43,68 @@ const App: React.FC = () => {
   const [elapsedTime, setElapsedTime] = useState(0);
 
   const handleStartQuiz = async () => {
-    setView('loading');
-    try {
-      const questions = await generateMathQuestions(
-        config.grade,
-        config.topic,
-        config.difficulty,
-        config.questionCount,
-        config.questionType
-      );
+  alert("STEP 1: start");
+  setView('loading');
+
+  try {
+    alert("STEP 2: before generate");
+
+    const questions = await generateMathQuestions(
+      config.grade,
+      config.topic,
+      config.difficulty,
+      config.questionCount,
+      config.questionType
+    );
+
+    alert("STEP 3: after generate");
+
+    if (!Array.isArray(questions)) {
+      alert("STEP 4: questions is NOT array");
+      setView('setup');
+      return;
+    }
+
+    alert("STEP 5: questions length = " + questions.length);
+
+    if (questions.length === 0) {
+      alert("STEP 6: questions empty");
+      setView('setup');
+      return;
+    }
+
+    alert("STEP 7: before init answers");
+
+    const initialAnswers = questions.map(q => {
+      if (q.type === QuestionType.TRUE_FALSE) {
+        return [undefined, undefined, undefined, undefined];
+      }
+      return -1;
+    });
+
+    alert("STEP 8: after init answers");
+
+    setQuizState({
+      questions,
+      userAnswers: initialAnswers,
+      currentQuestionIndex: 0,
+      isComplete: false,
+      score: 0,
+      warnings: 0,
+      startTime: Date.now(),
+      submissionReason: 'normal'
+    });
+
+    alert("STEP 9: before setView quiz");
+    setView('quiz');
+    alert("STEP 10: end");
+
+  } catch (err: any) {
+    alert("CATCH ERROR: " + (err?.message || err));
+    setView('setup');
+  }
+};
+
       
       const initialAnswers = questions.map(q => {
         if (q.type === QuestionType.TRUE_FALSE) {
