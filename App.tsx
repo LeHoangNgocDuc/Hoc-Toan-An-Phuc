@@ -107,38 +107,51 @@ const App: React.FC = () => {
     setView('quiz');
     alert("STEP 10: setView quiz done");
 
-  } catch (err: any) {
-    alert("CATCH ERROR: " + (err?.message || JSON.stringify(err)));
+  } 
+   const handleStartQuiz = async () => {
+  setView('loading');
+
+  try {
+    const questions = await generateMathQuestions(
+      config.grade,
+      config.topic,
+      config.difficulty,
+      config.questionCount,
+      config.questionType
+    );
+
+    if (!Array.isArray(questions) || questions.length === 0) {
+      alert("Không tạo được câu hỏi. Vui lòng thử lại.");
+      setView('setup');
+      return;
+    }
+
+    const initialAnswers = questions.map(q =>
+      q.type === QuestionType.TRUE_FALSE
+        ? [undefined, undefined, undefined, undefined]
+        : -1
+    );
+
+    setQuizState({
+      questions,
+      userAnswers: initialAnswers,
+      currentQuestionIndex: 0,
+      isComplete: false,
+      score: 0,
+      warnings: 0,
+      startTime: Date.now(),
+      submissionReason: 'normal'
+    });
+
+    setElapsedTime(0);
+    setView('quiz');
+
+  } catch (error) {
+    alert("Có lỗi xảy ra khi tạo câu hỏi. Vui lòng thử lại.");
     setView('setup');
   }
 };
 
-
-      
-      const initialAnswers = questions.map(q => {
-        if (q.type === QuestionType.TRUE_FALSE) {
-          return [undefined, undefined, undefined, undefined] as any;
-        }
-        return -1; 
-      });
-
-      setQuizState({
-        questions,
-        userAnswers: initialAnswers,
-        currentQuestionIndex: 0,
-        isComplete: false,
-        score: 0,
-        warnings: 0,
-        startTime: Date.now(),
-        submissionReason: 'normal'
-      });
-      setElapsedTime(0);
-      setView('quiz');
-    } catch (error) {
-      alert("Có lỗi xảy ra khi tạo câu hỏi. Vui lòng thử lại.");
-      setView('setup');
-    }
-  };
 
   const handleMCSelect = (optionIndex: number) => {
     if (quizState.isComplete) return;
