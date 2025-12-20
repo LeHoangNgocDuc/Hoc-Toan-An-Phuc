@@ -54,7 +54,7 @@ export const generateMathQuestions = async (
      4. MODEL (ỔN ĐỊNH)
   ========================= */
   const model = genAI.getGenerativeModel({
-    model: "gemini-1.5-pro",
+    model: "gemini-pro",
     generationConfig: {
       responseMimeType: "application/json",
       temperature: 0.7,
