@@ -1,25 +1,23 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { Difficulty, Grade, Question, QuestionType } from "../types";
 
-const ai = new GoogleGenAI({ apiKey: process.env.GEMINE_API_KEY });
+// Khởi tạo Gemini với Key của bạn (Đã điền sẵn Key từ tin nhắn trước để bạn chạy luôn)
+const genAI = new GoogleGenerativeAI("AIzaSyCi5Yw7aoAhxUaZWRPgX8hnta0TOSBmEdY");
 
 const sanitizeString = (str: string): string => {
   if (!str) return "";
   return str
-    // Remove environment tags which force display mode
     .replace(/\\begin\{equation\*?\}/g, '')
     .replace(/\\end\{equation\*?\}/g, '')
     .replace(/\\begin\{align\*?\}/g, '')
     .replace(/\\end\{align\*?\}/g, '')
     .replace(/\\begin\{gather\*?\}/g, '')
     .replace(/\\end\{gather\*?\}/g, '')
-    // Normalize delimiters
-    .replace(/\$\$/g, '$')       // Replace $$ with $
-    .replace(/\\\[/g, '$')       // Replace \[ with $
-    .replace(/\\\]/g, '$')       // Replace \] with $
-    // Remove newlines
-    .replace(/\\n/g, ' ')        // Replace escaped newlines
-    .replace(/\n/g, ' ')         // Replace actual newlines
+    .replace(/\$\$/g, '$')       
+    .replace(/\\\[/g, '$')       
+    .replace(/\\\]/g, '$')       
+    .replace(/\\n/g, ' ')       
+    .replace(/\n/g, ' ')         
     .trim();
 };
 
@@ -30,7 +28,16 @@ export const generateMathQuestions = async (
   count: number,
   questionType: QuestionType | 'MIXED'
 ): Promise<Question[]> => {
-  const model = "gemini-2.5-flash";
+  
+  // SỬA LỖI 1: Dùng model chuẩn "gemini-1.5-flash"
+  // SỬA LỖI 2: Cấu hình responseMimeType là JSON để không bị lỗi cú pháp
+  const model = genAI.getGenerativeModel({ 
+    model: "gemini-1.5-flash",
+    generationConfig: {
+      responseMimeType: "application/json",
+      temperature: 0.7 
+    }
+  });
 
   let typeInstruction = "";
   if (questionType === QuestionType.MULTIPLE_CHOICE) {
@@ -42,79 +49,61 @@ export const generateMathQuestions = async (
   }
 
   const prompt = `
-    Tạo bộ ${count} câu hỏi Toán lớp ${grade} (THCS Việt Nam).
+    Bạn là giáo viên Toán THCS. Hãy tạo bộ ${count} câu hỏi Toán lớp ${grade}.
     Chủ đề: ${topic}.
     Độ khó: ${difficulty}.
     ${typeInstruction}
     
     Yêu cầu ĐỊNH DẠNG (QUAN TRỌNG):
-    1. Trả về JSON thuần túy.
+    1. Trả về JSON thuần túy (Array of Objects).
     2. Cú pháp LaTeX cho TOÀN BỘ biểu thức toán.
     3. BẮT BUỘC dùng dấu $ đơn cho công thức (ví dụ: $x^2$). TUYỆT ĐỐI KHÔNG dùng $$ hoặc \\[ \\].
     4. KHÔNG được xuống dòng (\\n) trong chuỗi văn bản.
     
-    Cấu trúc JSON cho từng loại:
-    - Trắc nghiệm (MULTIPLE_CHOICE):
+    Cấu trúc JSON mong muốn:
+    [
       {
         "type": "MULTIPLE_CHOICE",
         "questionText": "...",
-        "options": ["...", "...", "...", "..."],
-        "correctAnswerIndex": 0 (0-3),
+        "options": ["A", "B", "C", "D"],
+        "correctAnswerIndex": 0,
         "explanation": "..."
-      }
-    - Đúng/Sai (TRUE_FALSE):
+      },
       {
         "type": "TRUE_FALSE",
-        "questionText": "Cho biểu thức...",
-        "propositions": ["Mệnh đề a", "Mệnh đề b", "Mệnh đề c", "Mệnh đề d"],
+        "questionText": "...",
+        "propositions": ["a", "b", "c", "d"],
         "correctAnswersTF": [true, false, true, false],
         "explanation": "..."
       }
+    ]
   `;
 
   try {
-    const response = await ai.models.generateContent({
-      model: model,
-      contents: prompt,
-      config: {
-        responseMimeType: "application/json",
-        responseSchema: {
-          type: Type.ARRAY,
-          items: {
-            type: Type.OBJECT,
-            properties: {
-              id: { type: Type.STRING },
-              type: { type: Type.STRING, enum: [QuestionType.MULTIPLE_CHOICE, QuestionType.TRUE_FALSE] },
-              questionText: { type: Type.STRING },
-              options: { type: Type.ARRAY, items: { type: Type.STRING } },
-              correctAnswerIndex: { type: Type.INTEGER },
-              propositions: { type: Type.ARRAY, items: { type: Type.STRING } },
-              correctAnswersTF: { type: Type.ARRAY, items: { type: Type.BOOLEAN } },
-              explanation: { type: Type.STRING },
-            },
-            required: ["type", "questionText", "explanation"],
-          },
-        },
-      },
-    });
+    // SỬA LỖI 3: Gọi hàm generateContent đúng chuẩn SDK
+    const result = await model.generateContent(prompt);
+    const response = await result.response;
+    const text = response.text();
 
-    if (response.text) {
-      const rawQuestions = JSON.parse(response.text) as Question[];
+    // Parse JSON từ kết quả trả về
+    const rawQuestions = JSON.parse(text) as Question[];
       
-      const sanitizedQuestions = rawQuestions.map((q, index) => ({
-        ...q,
-        id: `q-${Date.now()}-${index}`,
-        questionText: sanitizeString(q.questionText),
-        explanation: sanitizeString(q.explanation),
-        options: q.options ? q.options.map(opt => sanitizeString(opt)) : undefined,
-        propositions: q.propositions ? q.propositions.map(prop => sanitizeString(prop)) : undefined
-      }));
+    const sanitizedQuestions = rawQuestions.map((q, index) => ({
+      ...q,
+      id: `q-${Date.now()}-${index}`,
+      questionText: sanitizeString(q.questionText),
+      explanation: sanitizeString(q.explanation),
+      options: q.options ? q.options.map(opt => sanitizeString(opt)) : undefined,
+      propositions: q.propositions ? q.propositions.map(prop => sanitizeString(prop)) : undefined
+    }));
 
-      return sanitizedQuestions.slice(0, count);
-    }
-    throw new Error("Không nhận được dữ liệu từ Gemini.");
-  } catch (error) {
+    return sanitizedQuestions.slice(0, count);
+
+  } catch (error: any) {
     console.error("Lỗi khi tạo câu hỏi:", error);
+    if (error.message && error.message.includes("429")) {
+        alert("Hệ thống đang bận. Vui lòng đợi 30 giây!");
+    }
     throw error;
   }
 };
