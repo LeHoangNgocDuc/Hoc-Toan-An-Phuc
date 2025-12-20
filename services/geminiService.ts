@@ -1,19 +1,7 @@
-import { GoogleGenerativeAI } from "@google/generative-ai";
 import { Difficulty, Grade, Question, QuestionType } from "../types";
 
 /* =========================
-   1. API KEY
-========================= */
-const API_KEY = import.meta.env.VITE_GEMINI_API_KEY;
-
-if (!API_KEY) {
-  console.error("❌ Missing VITE_GEMINI_API_KEY");
-}
-
-const genAI = new GoogleGenerativeAI(API_KEY || "NO_KEY");
-
-/* =========================
-   2. SANITIZE TEX
+   1. SANITIZE TEXT
 ========================= */
 const sanitizeString = (str?: string): string => {
   if (!str) return "";
@@ -33,7 +21,7 @@ const sanitizeString = (str?: string): string => {
 };
 
 /* =========================
-   3. MAIN FUNCTION
+   2. MAIN FUNCTION
 ========================= */
 export const generateMathQuestions = async (
   grade: Grade,
@@ -43,26 +31,8 @@ export const generateMathQuestions = async (
   questionType: QuestionType | "MIXED"
 ): Promise<Question[]> => {
 
-  if (!API_KEY) {
-    const msg =
-      "LỖI: Không tìm thấy API Key. Hãy kiểm tra biến VITE_GEMINI_API_KEY trên Vercel.";
-    alert(msg);
-    throw new Error(msg);
-  }
-
   /* =========================
-     4. MODEL (ỔN ĐỊNH)
-  ========================= */
-  const model = genAI.getGenerativeModel({
-    model: "gemini-pro",
-    generationConfig: {
-      responseMimeType: "application/json",
-      temperature: 0.7,
-    },
-  });
-
-  /* =========================
-     5. QUESTION TYPE RULE
+     3. QUESTION TYPE RULE
   ========================= */
   let typeInstruction = "";
   switch (questionType) {
@@ -80,7 +50,7 @@ export const generateMathQuestions = async (
   }
 
   /* =========================
-     6. PROMPT
+     4. PROMPT
   ========================= */
   const prompt = `
 Bạn là giáo viên Toán THCS.
@@ -115,16 +85,20 @@ Yêu cầu:
 `;
 
   /* =========================
-     7. GENERATE
+     5. CALL BACKEND API
   ========================= */
   try {
-    const result = await model.generateContent(prompt);
-    let text = result.response.text();
+    const res = await fetch("/api/generate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ prompt }),
+    });
 
-    // Remove code fences nếu model trả về
-    text = text.replace(/```json|```/g, "").trim();
+    if (!res.ok) {
+      throw new Error(`Backend error: ${res.status}`);
+    }
 
-    const rawQuestions = JSON.parse(text) as Question[];
+    const rawQuestions = (await res.json()) as Question[];
 
     return rawQuestions.slice(0, count).map((q, index) => ({
       ...q,
@@ -136,16 +110,12 @@ Yêu cầu:
     }));
 
   } catch (error: any) {
-    console.error("❌ Gemini Error:", error);
+    console.error("❌ Backend Gemini Error:", error);
 
     let userMessage = "Có lỗi xảy ra khi tạo câu hỏi.";
 
     if (error.message?.includes("429")) {
       userMessage = "LỖI 429: Hết quota miễn phí. Vui lòng thử lại sau.";
-    } else if (error.message?.includes("API key not valid")) {
-      userMessage = "LỖI: API Key không hợp lệ hoặc đã bị khóa.";
-    } else if (error.message?.includes("404")) {
-      userMessage = "LỖI: Model Gemini không khả dụng.";
     }
 
     alert(userMessage);
