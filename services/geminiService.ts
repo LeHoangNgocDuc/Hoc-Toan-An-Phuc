@@ -1,17 +1,12 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { Difficulty, Grade, Question, QuestionType } from "../types";
 
-// 1. Lấy Key từ biến môi trường (An toàn)
+// 1. Lấy Key
 const API_KEY = import.meta.env.VITE_GEMINI_API_KEY;
 
-// Kiểm tra xem đã có Key chưa
-if (!API_KEY) {
-  console.error("❌ LỖI: Chưa cấu hình VITE_GEMINI_API_KEY trong file .env hoặc trên Vercel!");
-}
+// Khởi tạo (Nếu không có key thì để rỗng để bắt lỗi sau)
+const genAI = new GoogleGenerativeAI(API_KEY || "NO_KEY");
 
-const genAI = new GoogleGenerativeAI(API_KEY || "");
-
-// Hàm làm sạch chuỗi LaTeX/Văn bản
 const sanitizeString = (str: string): string => {
   if (!str) return "";
   return str
@@ -37,8 +32,11 @@ export const generateMathQuestions = async (
   questionType: QuestionType | 'MIXED'
 ): Promise<Question[]> => {
   
+  // KIỂM TRA KEY VÀ BÁO LỖI CỤ THỂ
   if (!API_KEY) {
-    throw new Error("Chưa có khóa API. Vui lòng kiểm tra cài đặt.");
+    const errorMsg = "LỖI: Chưa tìm thấy API Key. Hãy kiểm tra tên biến VITE_GEMINI_API_KEY trên Vercel.";
+    alert(errorMsg); // Hiện thông báo lên màn hình
+    throw new Error(errorMsg);
   }
 
   const model = genAI.getGenerativeModel({ 
@@ -64,13 +62,7 @@ export const generateMathQuestions = async (
     Độ khó: ${difficulty}.
     ${typeInstruction}
      
-    Yêu cầu ĐỊNH DẠNG (QUAN TRỌNG):
-    1. Trả về JSON thuần túy (Array of Objects).
-    2. Cú pháp LaTeX cho TOÀN BỘ biểu thức toán.
-    3. BẮT BUỘC dùng dấu $ đơn cho công thức (ví dụ: $x^2$). TUYỆT ĐỐI KHÔNG dùng $$ hoặc \\[ \\].
-    4. KHÔNG được xuống dòng (\\n) trong chuỗi văn bản.
-     
-    Cấu trúc JSON mong muốn:
+    Yêu cầu JSON format (No markdown):
     [
       {
         "type": "MULTIPLE_CHOICE",
@@ -94,14 +86,12 @@ export const generateMathQuestions = async (
     const response = await result.response;
     let text = response.text();
 
-    // 2. Xử lý trường hợp AI trả về markdown code block (```json ... ```)
     if (text.includes("```json")) {
         text = text.replace(/```json/g, "").replace(/```/g, "");
     } else if (text.includes("```")) {
         text = text.replace(/```/g, "");
     }
     
-    // Parse JSON
     const rawQuestions = JSON.parse(text) as Question[];
       
     const sanitizedQuestions = rawQuestions.map((q, index) => ({
@@ -116,11 +106,20 @@ export const generateMathQuestions = async (
     return sanitizedQuestions.slice(0, count);
 
   } catch (error: any) {
-    console.error("Lỗi khi tạo câu hỏi:", error);
-    // Xử lý lỗi 503 (Server quá tải) hoặc 429 (Hết lượt)
-    if (error.message && (error.message.includes("503") || error.message.includes("429"))) {
-        throw new Error("Hệ thống AI đang bận. Vui lòng thử lại sau 30 giây.");
+    // BẮT LỖI VÀ HIỆN THÔNG BÁO CHI TIẾT
+    console.error("Lỗi:", error);
+    
+    let userMessage = "Có lỗi xảy ra: " + error.message;
+
+    if (error.message.includes("429")) {
+        userMessage = "LỖI 429: Hết lượt dùng miễn phí (Quota Exceeded). Hãy chờ 1 lát.";
+    } else if (error.message.includes("API key not valid")) {
+        userMessage = "LỖI KEY: API Key không đúng hoặc đã bị Google khóa.";
+    } else if (error.message.includes("Failed to fetch")) {
+        userMessage = "LỖI MẠNG: Kiểm tra kết nối internet.";
     }
+
+    alert(userMessage); // Hiện thông báo lỗi cụ thể cho người dùng thấy
     throw error;
   }
 };
