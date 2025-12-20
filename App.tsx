@@ -42,12 +42,12 @@ const App: React.FC = () => {
   const timerRef = useRef<number | null>(null);
   const [elapsedTime, setElapsedTime] = useState(0);
 
-  const handleStartQuiz = async () => {
+ const handleStartQuiz = async () => {
   alert("STEP 1: start");
   setView('loading');
 
   try {
-    alert("STEP 2: before generate");
+    alert("STEP 2: before generateMathQuestions");
 
     const questions = await generateMathQuestions(
       config.grade,
@@ -57,32 +57,39 @@ const App: React.FC = () => {
       config.questionType
     );
 
-    alert("STEP 3: after generate");
+    alert("STEP 3: after generateMathQuestions");
 
+    // 🔒 Guard 1: dữ liệu không phải mảng
     if (!Array.isArray(questions)) {
-      alert("STEP 4: questions is NOT array");
+      alert("STEP 4: questions is NOT an array");
       setView('setup');
       return;
     }
 
-    alert("STEP 5: questions length = " + questions.length);
-
+    // 🔒 Guard 2: mảng rỗng
     if (questions.length === 0) {
-      alert("STEP 6: questions empty");
+      alert("STEP 5: questions array is EMPTY");
       setView('setup');
       return;
     }
 
-    alert("STEP 7: before init answers");
+    alert("STEP 6: questions length = " + questions.length);
 
-    const initialAnswers = questions.map(q => {
+    // 🔒 Guard 3: tạo userAnswers an toàn
+    const initialAnswers = questions.map((q, index) => {
+      if (!q || !q.type) {
+        alert("STEP 7: invalid question at index " + index);
+        return -1;
+      }
+
       if (q.type === QuestionType.TRUE_FALSE) {
         return [undefined, undefined, undefined, undefined];
       }
+
       return -1;
     });
 
-    alert("STEP 8: after init answers");
+    alert("STEP 8: initialAnswers created");
 
     setQuizState({
       questions,
@@ -95,15 +102,17 @@ const App: React.FC = () => {
       submissionReason: 'normal'
     });
 
-    alert("STEP 9: before setView quiz");
+    alert("STEP 9: quizState set");
+
     setView('quiz');
-    alert("STEP 10: end");
+    alert("STEP 10: setView quiz done");
 
   } catch (err: any) {
-    alert("CATCH ERROR: " + (err?.message || err));
+    alert("CATCH ERROR: " + (err?.message || JSON.stringify(err)));
     setView('setup');
   }
 };
+
 
       
       const initialAnswers = questions.map(q => {
