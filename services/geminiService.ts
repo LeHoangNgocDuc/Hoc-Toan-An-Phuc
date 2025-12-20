@@ -27,9 +27,12 @@ export const generateMathQuestions = async (
   grade: Grade,
   topic: string,
   difficulty: Difficulty,
-  count: number,
+  _count: number, // ⚠️ không dùng trực tiếp nữa
   questionType: QuestionType | "MIXED"
 ): Promise<Question[]> => {
+
+  // 🔒 ÉP TỐI ĐA 5 CÂU – ỔN ĐỊNH GEMINI FREE
+  const safeCount = 5;
 
   /* =========================
      3. QUESTION TYPE RULE
@@ -50,22 +53,23 @@ export const generateMathQuestions = async (
   }
 
   /* =========================
-     4. PROMPT
+     4. PROMPT (NHẸ – CHỐNG LỖI)
   ========================= */
   const prompt = `
 Bạn là giáo viên Toán THCS.
 
-Hãy tạo ${count} câu hỏi Toán lớp ${grade}.
+Hãy tạo ${safeCount} câu hỏi Toán lớp ${grade}.
 Chủ đề: ${topic}.
 Độ khó: ${difficulty}.
 ${typeInstruction}
 
-Yêu cầu:
-- Chỉ trả về JSON thuần
+YÊU CẦU BẮT BUỘC:
+- Chỉ trả về JSON hợp lệ
 - Không markdown
 - Không giải thích ngoài JSON
+- Nếu không chắc, trả về mảng rỗng []
 
-Định dạng:
+ĐỊNH DẠNG:
 [
   {
     "type": "MULTIPLE_CHOICE",
@@ -95,12 +99,18 @@ Yêu cầu:
     });
 
     if (!res.ok) {
-      throw new Error(`Backend error: ${res.status}`);
+      console.error("❌ Backend error status:", res.status);
+      return [];
     }
 
     const rawQuestions = (await res.json()) as Question[];
 
-    return rawQuestions.slice(0, count).map((q, index) => ({
+    if (!Array.isArray(rawQuestions)) {
+      console.error("❌ Backend returned non-array:", rawQuestions);
+      return [];
+    }
+
+    return rawQuestions.slice(0, safeCount).map((q, index) => ({
       ...q,
       id: `q-${Date.now()}-${index}`,
       questionText: sanitizeString(q.questionText),
@@ -109,16 +119,8 @@ Yêu cầu:
       propositions: q.propositions?.map(sanitizeString),
     }));
 
-  } catch (error: any) {
-    console.error("❌ Backend Gemini Error:", error);
-
-    let userMessage = "Có lỗi xảy ra khi tạo câu hỏi.";
-
-    if (error.message?.includes("429")) {
-      userMessage = "LỖI 429: Hết quota miễn phí. Vui lòng thử lại sau.";
-    }
-
-    alert(userMessage);
-    throw error;
+  } catch (error) {
+    console.error("❌ generateMathQuestions failed:", error);
+    return [];
   }
 };
