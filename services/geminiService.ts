@@ -1,9 +1,17 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { Difficulty, Grade, Question, QuestionType } from "../types";
 
-// Khởi tạo Gemini với Key của bạn (Đã điền sẵn Key từ tin nhắn trước để bạn chạy luôn)
-const genAI = new GoogleGenerativeAI("AIzaSyCi5Yw7aoAhxUaZWRPgX8hnta0TOSBmEdY");
+// 1. Lấy Key từ biến môi trường (An toàn)
+const API_KEY = import.meta.env.VITE_GEMINI_API_KEY;
 
+// Kiểm tra xem đã có Key chưa
+if (!API_KEY) {
+  console.error("❌ LỖI: Chưa cấu hình VITE_GEMINI_API_KEY trong file .env hoặc trên Vercel!");
+}
+
+const genAI = new GoogleGenerativeAI(API_KEY || "");
+
+// Hàm làm sạch chuỗi LaTeX/Văn bản
 const sanitizeString = (str: string): string => {
   if (!str) return "";
   return str
@@ -13,11 +21,11 @@ const sanitizeString = (str: string): string => {
     .replace(/\\end\{align\*?\}/g, '')
     .replace(/\\begin\{gather\*?\}/g, '')
     .replace(/\\end\{gather\*?\}/g, '')
-    .replace(/\$\$/g, '$')       
-    .replace(/\\\[/g, '$')       
-    .replace(/\\\]/g, '$')       
-    .replace(/\\n/g, ' ')       
-    .replace(/\n/g, ' ')         
+    .replace(/\$\$/g, '$')        
+    .replace(/\\\[/g, '$')        
+    .replace(/\\\]/g, '$')        
+    .replace(/\\n/g, ' ')        
+    .replace(/\n/g, ' ')          
     .trim();
 };
 
@@ -29,8 +37,10 @@ export const generateMathQuestions = async (
   questionType: QuestionType | 'MIXED'
 ): Promise<Question[]> => {
   
-  // SỬA LỖI 1: Dùng model chuẩn "gemini-1.5-flash"
-  // SỬA LỖI 2: Cấu hình responseMimeType là JSON để không bị lỗi cú pháp
+  if (!API_KEY) {
+    throw new Error("Chưa có khóa API. Vui lòng kiểm tra cài đặt.");
+  }
+
   const model = genAI.getGenerativeModel({ 
     model: "gemini-1.5-flash",
     generationConfig: {
@@ -53,13 +63,13 @@ export const generateMathQuestions = async (
     Chủ đề: ${topic}.
     Độ khó: ${difficulty}.
     ${typeInstruction}
-    
+     
     Yêu cầu ĐỊNH DẠNG (QUAN TRỌNG):
     1. Trả về JSON thuần túy (Array of Objects).
     2. Cú pháp LaTeX cho TOÀN BỘ biểu thức toán.
     3. BẮT BUỘC dùng dấu $ đơn cho công thức (ví dụ: $x^2$). TUYỆT ĐỐI KHÔNG dùng $$ hoặc \\[ \\].
     4. KHÔNG được xuống dòng (\\n) trong chuỗi văn bản.
-    
+     
     Cấu trúc JSON mong muốn:
     [
       {
@@ -80,12 +90,18 @@ export const generateMathQuestions = async (
   `;
 
   try {
-    // SỬA LỖI 3: Gọi hàm generateContent đúng chuẩn SDK
     const result = await model.generateContent(prompt);
     const response = await result.response;
-    const text = response.text();
+    let text = response.text();
 
-    // Parse JSON từ kết quả trả về
+    // 2. Xử lý trường hợp AI trả về markdown code block (```json ... ```)
+    if (text.includes("```json")) {
+        text = text.replace(/```json/g, "").replace(/```/g, "");
+    } else if (text.includes("```")) {
+        text = text.replace(/```/g, "");
+    }
+    
+    // Parse JSON
     const rawQuestions = JSON.parse(text) as Question[];
       
     const sanitizedQuestions = rawQuestions.map((q, index) => ({
@@ -101,8 +117,9 @@ export const generateMathQuestions = async (
 
   } catch (error: any) {
     console.error("Lỗi khi tạo câu hỏi:", error);
-    if (error.message && error.message.includes("429")) {
-        alert("Hệ thống đang bận. Vui lòng đợi 30 giây!");
+    // Xử lý lỗi 503 (Server quá tải) hoặc 429 (Hết lượt)
+    if (error.message && (error.message.includes("503") || error.message.includes("429"))) {
+        throw new Error("Hệ thống AI đang bận. Vui lòng thử lại sau 30 giây.");
     }
     throw error;
   }
