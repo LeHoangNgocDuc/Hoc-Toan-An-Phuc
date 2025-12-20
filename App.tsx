@@ -107,7 +107,6 @@ const App: React.FC = () => {
     setView('quiz');
     alert("STEP 10: setView quiz done");
 
-  } 
    const handleStartQuiz = async () => {
   setView('loading');
 
