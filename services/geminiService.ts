@@ -1,4 +1,4 @@
-import { GoogleGenAI, Type } from "@google/genai";
+import { GoogleGenerativeAI } from "@google/generative-ai";
 import { Difficulty, Grade, Question, QuestionType } from "../types";
 
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINE_API_KEY });
