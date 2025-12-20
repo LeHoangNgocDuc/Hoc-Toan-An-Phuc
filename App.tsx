@@ -519,7 +519,10 @@ const App: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-teal-50 to-teal-100 py-12 px-4 sm:px-6">
+    <div className="min-h-screen bg-gradient-to-br from-teal-50 to-teal-100 py-12 px-4 sm:px-6"> 
+          <div style={{ padding: 10, color: 'red', fontWeight: 'bold' }}>
+      VIEW = {view} | QUESTIONS = {quizState.questions.length}
+    </div>
       {view === 'setup' && renderSetup()}
       {view === 'loading' && <LoadingScreen />}
       {view === 'quiz' && renderQuiz()}
