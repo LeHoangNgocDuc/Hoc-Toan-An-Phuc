@@ -603,6 +603,6 @@ const App: React.FC = () => {
       {view === 'summary' && renderSummary()}
     </div>
   );
-}
+};
 
 export default App;
